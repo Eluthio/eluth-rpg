@@ -2,6 +2,7 @@
 use Illuminate\Support\Facades\Schema;
 
 // Dropped in reverse dependency order
+Schema::dropIfExists('rpg_invites');
 Schema::dropIfExists('rpg_messages');
 Schema::dropIfExists('rpg_rolls');
 Schema::dropIfExists('rpg_roll_queue');

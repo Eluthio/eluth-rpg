@@ -84,7 +84,6 @@ async function checkActiveSession() {
 }
 
 async function checkPendingInvites() {
-  if (isGm.value) return  // GMs don't receive invites
   const data = await api('GET', '/plugins/rpg/invites/pending')
   pendingInvite.value = data?.invites?.[0] ?? null
 }

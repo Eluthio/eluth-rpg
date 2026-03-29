@@ -7,7 +7,14 @@
         <div class="rpg-gm__header-actions">
           <span class="rpg-header__status" :class="'rpg-status--' + session?.status">{{ session?.status ?? 'connecting…' }}</span>
           <button v-if="session?.status === 'waiting'" class="rpg-btn rpg-btn--success" @click="startSession">Start Session</button>
-          <button v-if="session?.status !== 'ended'" class="rpg-btn rpg-btn--danger" @click="endSession">End</button>
+          <template v-if="session?.status !== 'ended'">
+            <template v-if="endConfirm">
+              <span style="font-size:12px;color:#e88;">End session?</span>
+              <button class="rpg-btn rpg-btn--danger rpg-btn--sm" @click="confirmEnd">Yes, end</button>
+              <button class="rpg-btn rpg-btn--ghost rpg-btn--sm" @click="endConfirm = false">Cancel</button>
+            </template>
+            <button v-else class="rpg-btn rpg-btn--danger" @click="endConfirm = true">End</button>
+          </template>
         </div>
       </div>
 
@@ -218,6 +225,9 @@ const msgContainer  = ref(null)
 const requestDice = ref({})
 const requestNote = ref({})
 
+// End session confirmation
+const endConfirm = ref(false)
+
 // Invite panel
 const showInvitePanel = ref(false)
 const serverMembers   = ref([])
@@ -329,8 +339,8 @@ async function startSession() {
   await pollState()
 }
 
-async function endSession() {
-  if (!confirm('End the session? This cannot be undone.')) return
+async function confirmEnd() {
+  endConfirm.value = false
   await api('DELETE', `/plugins/rpg/sessions/${props.sessionId}`)
   await pollState()
 }
