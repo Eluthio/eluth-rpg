@@ -5,7 +5,7 @@ import GmWindow from './GmWindow.vue'
 
 window.__EluthPlugins = window.__EluthPlugins || {}
 window.__EluthPlugins['rpg'] = {
-    zones: ['input'],
+    zones: ['channel-header'],
     component: RpgLauncher,
 
     // Message renderer: show a compact roll card when a roll is shared to chat

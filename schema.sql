@@ -75,6 +75,18 @@ CREATE TABLE IF NOT EXISTS `rpg_rolls` (
     KEY `rpg_rolls_session_id_index` (`session_id`)
 );
 
+CREATE TABLE IF NOT EXISTS `rpg_invites` (
+    `id` char(36) NOT NULL,
+    `session_id` char(36) NOT NULL,
+    `member_id` varchar(255) NOT NULL,
+    `username` varchar(255) NOT NULL,
+    `status` varchar(20) NOT NULL DEFAULT 'pending',
+    `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `rpg_invites_session_member_unique` (`session_id`, `member_id`),
+    KEY `rpg_invites_member_id_index` (`member_id`)
+);
+
 CREATE TABLE IF NOT EXISTS `rpg_messages` (
     `id` char(36) NOT NULL,
     `session_id` char(36) NOT NULL,

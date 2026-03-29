@@ -503,6 +503,118 @@ class RpgController
         return response()->json(['ok' => true]);
     }
 
+    // ─── Invites ─────────────────────────────────────────────────────────────
+
+    // POST /api/plugins/rpg/sessions/{id}/invite
+    public function createInvite(Request $request, string $id)
+    {
+        $member = $this->member($request);
+        $session = $this->session($id);
+        if (!$session) return $this->notFound();
+        if ($session->gm_member_id !== $member->central_user_id) return $this->forbidden();
+
+        $invitedMemberId = $request->input('member_id');
+        $invitedUsername = $request->input('username', '');
+
+        if (!$invitedMemberId) {
+            return response()->json(['error' => 'member_id required'], 422);
+        }
+
+        // Upsert — re-invite clears a previous decline
+        $existing = DB::table('rpg_invites')
+            ->where('session_id', $id)
+            ->where('member_id', $invitedMemberId)
+            ->first();
+
+        if ($existing) {
+            DB::table('rpg_invites')
+                ->where('id', $existing->id)
+                ->update(['status' => 'pending', 'created_at' => now()]);
+        } else {
+            DB::table('rpg_invites')->insert([
+                'id'         => (string) \Illuminate\Support\Str::uuid(),
+                'session_id' => $id,
+                'member_id'  => $invitedMemberId,
+                'username'   => $invitedUsername,
+                'status'     => 'pending',
+                'created_at' => now(),
+            ]);
+        }
+
+        return response()->json(['ok' => true], 201);
+    }
+
+    // GET /api/plugins/rpg/invites/pending
+    public function pendingInvites(Request $request)
+    {
+        $member = $this->member($request);
+
+        $invites = DB::table('rpg_invites')
+            ->join('rpg_sessions', 'rpg_invites.session_id', '=', 'rpg_sessions.id')
+            ->where('rpg_invites.member_id', $member->central_user_id)
+            ->where('rpg_invites.status', 'pending')
+            ->whereIn('rpg_sessions.status', ['waiting', 'active'])
+            ->select(
+                'rpg_invites.id',
+                'rpg_invites.session_id',
+                'rpg_sessions.channel_id',
+                'rpg_sessions.gm_member_id',
+                'rpg_sessions.gm_username',
+                'rpg_sessions.status as session_status'
+            )
+            ->get();
+
+        return response()->json(['invites' => $invites]);
+    }
+
+    // POST /api/plugins/rpg/invites/{inviteId}/accept
+    public function acceptInvite(Request $request, string $inviteId)
+    {
+        $member = $this->member($request);
+
+        $invite = DB::table('rpg_invites')
+            ->where('id', $inviteId)
+            ->where('member_id', $member->central_user_id)
+            ->where('status', 'pending')
+            ->first();
+
+        if (!$invite) return $this->notFound();
+
+        DB::table('rpg_invites')->where('id', $inviteId)->update(['status' => 'accepted']);
+
+        // Auto-join the session
+        $existing = DB::table('rpg_players')
+            ->where('session_id', $invite->session_id)
+            ->where('member_id', $member->central_user_id)
+            ->first();
+
+        if (!$existing) {
+            DB::table('rpg_players')->insert([
+                'id'         => (string) \Illuminate\Support\Str::uuid(),
+                'session_id' => $invite->session_id,
+                'member_id'  => $member->central_user_id,
+                'username'   => $member->username,
+                'joined_at'  => now(),
+            ]);
+        }
+
+        $session = $this->session($invite->session_id);
+        return response()->json(['session' => (array) $session]);
+    }
+
+    // POST /api/plugins/rpg/invites/{inviteId}/decline
+    public function declineInvite(Request $request, string $inviteId)
+    {
+        $member = $this->member($request);
+
+        DB::table('rpg_invites')
+            ->where('id', $inviteId)
+            ->where('member_id', $member->central_user_id)
+            ->update(['status' => 'declined']);
+
+        return response()->json(['ok' => true]);
+    }
+
     // ─── Private helpers ─────────────────────────────────────────────────────
 
     private function diceMax(string $type): ?int

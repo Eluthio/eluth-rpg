@@ -33,6 +33,12 @@ Route::prefix('/api/plugins/rpg')->middleware(['api', 'auth.central'])->group(fu
     // Characters
     Route::put('/sessions/{id}/characters',    [RpgController::class, 'saveCharacter']);
 
+    // Invites
+    Route::post('/sessions/{id}/invite',       [RpgController::class, 'createInvite']);
+    Route::get('/invites/pending',             [RpgController::class, 'pendingInvites']);
+    Route::post('/invites/{inviteId}/accept',  [RpgController::class, 'acceptInvite']);
+    Route::post('/invites/{inviteId}/decline', [RpgController::class, 'declineInvite']);
+
     // Templates
     Route::get('/sessions/{id}/templates',     [RpgController::class, 'getTemplates']);
     Route::post('/sessions/{id}/templates',    [RpgController::class, 'createTemplate']);
