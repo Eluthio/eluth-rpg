@@ -1,15 +1,15 @@
 <template>
   <div class="rpg-launcher">
-    <!-- Topbar button — only visible to GMs -->
+    <!-- Topbar button — visible to GMs with no active session, or the GM who owns the active session -->
     <button
-      v-if="isGm"
+      v-if="showGmButton"
       class="rpg-launch-btn"
-      :class="{ 'rpg-launch-btn--active': hasActiveSession }"
+      :class="{ 'rpg-launch-btn--active': isSessionGm }"
       :title="btnTitle"
       @click="launch"
     >
       🎲
-      <span v-if="hasActiveSession" class="rpg-launch-btn__dot" />
+      <span v-if="isSessionGm" class="rpg-launch-btn__dot" />
     </button>
 
     <!-- Invite toast — visible to players who have been invited -->
@@ -51,6 +51,15 @@ const isGm = computed(() =>
 )
 
 const hasActiveSession = computed(() => !!activeSession.value)
+
+// True only when this user is the GM of the current channel's active session
+const isSessionGm = computed(() =>
+  !!activeSession.value &&
+  activeSession.value.gm_member_id === props.currentMember?.id
+)
+
+// Show the button when: user has GM permission AND (no session yet, or they own the session)
+const showGmButton = computed(() => isGm.value && (!hasActiveSession.value || isSessionGm.value))
 
 const btnTitle = computed(() => {
   if (!hasActiveSession.value) return 'Start RPG Campaign'
@@ -179,7 +188,7 @@ function startObserver() {
 
 async function poll() {
   await checkActiveSession()
-  if (!isGm.value) await checkPendingInvites()
+  await checkPendingInvites()
 }
 
 watch(() => props.channelId, async () => {
