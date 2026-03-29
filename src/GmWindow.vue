@@ -79,6 +79,29 @@
             </div>
           </div>
 
+          <!-- Invite players -->
+          <div class="rpg-gm__section-title" style="margin-top: 16px;">
+            Invite Players
+            <button class="rpg-btn rpg-btn--ghost rpg-btn--xs" style="margin-left:6px;" @click="toggleInvitePanel">
+              {{ showInvitePanel ? 'Hide' : 'Show' }}
+            </button>
+          </div>
+          <template v-if="showInvitePanel">
+            <div v-if="serverMembers.length === 0" class="rpg-gm__empty">Loading members…</div>
+            <div
+              v-for="m in invitableMembers"
+              :key="m.id"
+              class="rpg-invite-row"
+            >
+              <span class="rpg-invite-row__name">{{ m.username }}</span>
+              <span v-if="invitedIds.has(m.id)" class="rpg-invite-row__sent">Invited</span>
+              <button v-else class="rpg-btn rpg-btn--primary rpg-btn--xs" @click="inviteMember(m)">Invite</button>
+            </div>
+            <div v-if="invitableMembers.length === 0 && serverMembers.length > 0" class="rpg-gm__empty">
+              All members are already in the session.
+            </div>
+          </template>
+
           <!-- Template manager -->
           <div class="rpg-gm__section-title" style="margin-top: 16px;">Character Templates</div>
           <div v-for="tmpl in templates" :key="tmpl.id" class="rpg-template-row">
@@ -194,6 +217,43 @@ const msgContainer  = ref(null)
 // Per-player request controls
 const requestDice = ref({})
 const requestNote = ref({})
+
+// Invite panel
+const showInvitePanel = ref(false)
+const serverMembers   = ref([])
+const invitedIds      = ref(new Set())
+
+const invitableMembers = computed(() => {
+  const playerIds = new Set(players.value.map(p => p.member_id))
+  return serverMembers.value.filter(m => m.id !== myMemberId.value && !playerIds.has(m.id))
+})
+
+async function fetchServerMembers() {
+  try {
+    const res = await fetch(base() + '/members', {
+      headers: { 'Authorization': 'Bearer ' + props.authToken, 'Accept': 'application/json' },
+    })
+    if (res.ok) {
+      const data = await res.json()
+      serverMembers.value = data.members ?? []
+    }
+  } catch {}
+}
+
+async function toggleInvitePanel() {
+  showInvitePanel.value = !showInvitePanel.value
+  if (showInvitePanel.value && serverMembers.value.length === 0) {
+    await fetchServerMembers()
+  }
+}
+
+async function inviteMember(member) {
+  invitedIds.value = new Set([...invitedIds.value, member.id])
+  await api('POST', `/plugins/rpg/sessions/${props.sessionId}/invite`, {
+    member_id: member.id,
+    username:  member.username,
+  })
+}
 
 // Template editor
 const showNewTemplate  = ref(false)
@@ -517,6 +577,17 @@ onBeforeUnmount(() => {
 }
 
 /* Templates */
+.rpg-invite-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px solid #2d2f4530;
+}
+.rpg-invite-row__name { color: #e0deff; }
+.rpg-invite-row__sent { font-size: 11px; color: #4fe8a3; }
+
 .rpg-template-row {
   display: flex;
   align-items: center;
