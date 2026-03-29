@@ -345,18 +345,21 @@ class RpgController
         }
 
         $queueId = (string) Str::uuid();
-        DB::table('rpg_roll_queue')->insert([
+        $insertData = [
             'id'                     => $queueId,
             'session_id'             => $id,
             'requested_by_member_id' => $member->central_user_id,
             'assigned_to_member_id'  => $assignedTo,
             'dice_type'              => $diceType,
             'note'                   => $note,
-            'is_public'              => $isPublic,
             'status'                 => 'pending',
             'created_at'             => now(),
             'updated_at'             => now(),
-        ]);
+        ];
+        if (\Illuminate\Support\Facades\Schema::hasColumn('rpg_roll_queue', 'is_public')) {
+            $insertData['is_public'] = $isPublic;
+        }
+        DB::table('rpg_roll_queue')->insert($insertData);
 
         return response()->json(['queue_item' => ['id' => $queueId, 'dice_type' => $diceType, 'note' => $note, 'is_public' => $isPublic]], 201);
     }

@@ -517,23 +517,22 @@ bc.onmessage = (e) => {
   }
 }
 
+function getMemberIdFromToken() {
+  try {
+    return JSON.parse(atob(props.authToken.split('.')[1])).sub ?? null
+  } catch { return null }
+}
+
 onMounted(async () => {
   // Init request dice defaults
   diceTypes.forEach(dt => {
     requestDice.value[dt] = 'd20'
   })
 
+  myMemberId.value = getMemberIdFromToken()
+
   await pollState()
   await fetchTemplates()
-
-  // Try to read member from API
-  const meRes = await fetch(base() + '/me', {
-    headers: { 'Authorization': 'Bearer ' + props.authToken, 'Accept': 'application/json' },
-  }).catch(() => null)
-  if (meRes?.ok) {
-    const me = await meRes.json().catch(() => null)
-    if (me) myMemberId.value = me.member?.central_user_id ?? me.id
-  }
 
   pollTimer = setInterval(pollState, 2500)
 })

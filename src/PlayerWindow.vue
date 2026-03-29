@@ -220,10 +220,7 @@ async function fetchTemplates() {
 }
 
 async function joinSession() {
-  const data = await api('POST', `/plugins/rpg/sessions/${props.sessionId}/join`)
-  if (data?.session) {
-    myMemberId.value = data.session.players?.find(p => p)?.member_id // will be overridden
-  }
+  await api('POST', `/plugins/rpg/sessions/${props.sessionId}/join`)
 }
 
 async function doFreeRoll(diceType) {
@@ -282,14 +279,16 @@ function scrollMessages() {
   }
 }
 
-// Get my member ID from the main window via BroadcastChannel
-function requestIdentity() {
-  bc.postMessage({ type: 'who-am-i' })
+function getMemberIdFromToken() {
+  try {
+    return JSON.parse(atob(props.authToken.split('.')[1])).sub ?? null
+  } catch { return null }
 }
 
 bc.onmessage = (e) => {
-  if (e.data?.type === 'identity') {
-    myMemberId.value = e.data.memberId
+  // Keep handler for state broadcasts from GM window
+  if (e.data?.type === 'state') {
+    // state updates handled via pollState
   }
 }
 
@@ -305,7 +304,7 @@ watch(freeRollResults, (val) => {
 }, { deep: true })
 
 onMounted(async () => {
-  requestIdentity()
+  myMemberId.value = getMemberIdFromToken()
   await joinSession()
   await fetchTemplates()
   await pollState()
