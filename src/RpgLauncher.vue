@@ -85,7 +85,7 @@ async function launch() {
     }
   }
 
-  const origin = window.location.origin
+  const origin = (window._eluthCommunityUrl ?? window.location.origin).replace(/\/$/, '')
   if (isGm.value) {
     window.open(`${origin}/?rpg_gm=${session.id}`, 'rpg-gm', 'width=1100,height=700,resizable=yes')
   } else {
@@ -130,6 +130,15 @@ function startObserver() {
   updateBadges()
 }
 
+function onInvite(e) {
+  if (!activeSession.value) {
+    alert('Start a campaign first, then invite players.')
+    return
+  }
+  const username = e.detail?.author ?? 'that player'
+  alert(`Ask ${username} to click the 🎲 button to join the campaign.`)
+}
+
 watch(() => props.channelId, async () => {
   activeSession.value = null
   await checkActiveSession()
@@ -141,12 +150,14 @@ onMounted(async () => {
   await checkActiveSession()
   pollTimer = setInterval(checkActiveSession, 10000)
   startObserver()
+  document.addEventListener('rpg:invite', onInvite)
 })
 
 onBeforeUnmount(() => {
   clearInterval(pollTimer)
   observer?.disconnect()
   document.querySelectorAll('.rpg-name-badge').forEach(el => el.remove())
+  document.removeEventListener('rpg:invite', onInvite)
 })
 </script>
 

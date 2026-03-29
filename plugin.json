@@ -1,7 +1,7 @@
 {
   "name": "Tabletop RPG",
   "slug": "rpg",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "min_server_version": "1.5.5",
   "tier": "official",
   "entry": "index.js",
