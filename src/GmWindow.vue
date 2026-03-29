@@ -71,6 +71,10 @@
                 class="rpg-input rpg-input--sm"
                 placeholder="Note (optional)"
               />
+              <div class="rpg-visibility-toggle">
+                <button :class="['rpg-vis-btn', (requestPublic[player.member_id] ?? true) ? 'rpg-vis-btn--on' : '']" @click="requestPublic[player.member_id] = true">Public</button>
+                <button :class="['rpg-vis-btn', !(requestPublic[player.member_id] ?? true) ? 'rpg-vis-btn--on' : '']" @click="requestPublic[player.member_id] = false">Private</button>
+              </div>
               <button class="rpg-btn rpg-btn--primary rpg-btn--sm" @click="requestRoll(player.member_id)">
                 Request Roll
               </button>
@@ -139,6 +143,23 @@
 
         <!-- Right panel: chat + rolls -->
         <div class="rpg-gm__chat-panel">
+
+          <!-- GM dice strip -->
+          <div class="rpg-gm__dice-strip">
+            <span class="rpg-gm__dice-label">GM Roll</span>
+            <select v-model="gmDiceType" class="rpg-select rpg-select--sm">
+              <option v-for="dt in diceTypes" :key="dt" :value="dt">{{ dt }}</option>
+            </select>
+            <div class="rpg-visibility-toggle">
+              <button :class="['rpg-vis-btn', gmRollPublic ? 'rpg-vis-btn--on' : '']" @click="gmRollPublic = true">Public</button>
+              <button :class="['rpg-vis-btn', !gmRollPublic ? 'rpg-vis-btn--on' : '']" @click="gmRollPublic = false">Private</button>
+            </div>
+            <button class="rpg-btn rpg-btn--primary rpg-btn--sm" :disabled="gmRolling" @click="doGmRoll">
+              {{ gmRolling ? '…' : 'Roll' }}
+            </button>
+            <span v-if="gmRollResult !== null" class="rpg-gm__dice-result">→ <strong>{{ gmRollResult }}</strong></span>
+          </div>
+
           <div class="rpg-tabs">
             <button v-for="tab in chatTabs" :key="tab" class="rpg-tab" :class="{ active: activeTab === tab }" @click="activeTab = tab">{{ tab }}</button>
           </div>
@@ -222,11 +243,18 @@ const expandedSheet = ref(null)
 const msgContainer  = ref(null)
 
 // Per-player request controls
-const requestDice = ref({})
-const requestNote = ref({})
+const requestDice   = ref({})
+const requestNote   = ref({})
+const requestPublic = ref({})
 
 // End session confirmation
 const endConfirm = ref(false)
+
+// GM's own rolls
+const gmDiceType   = ref('d20')
+const gmRollPublic = ref(false)
+const gmRollResult = ref(null)
+const gmRolling    = ref(false)
 
 // Invite panel
 const showInvitePanel = ref(false)
@@ -235,7 +263,12 @@ const invitedIds      = ref(new Set())
 
 const invitableMembers = computed(() => {
   const playerIds = new Set(players.value.map(p => p.member_id))
-  return serverMembers.value.filter(m => m.id !== myMemberId.value && !playerIds.has(m.id))
+  const gmId = session.value?.gm_member_id
+  return serverMembers.value.filter(m =>
+    m.id !== myMemberId.value &&
+    (!gmId || m.id !== gmId) &&
+    !playerIds.has(m.id)
+  )
 })
 
 async function fetchServerMembers() {
@@ -334,6 +367,39 @@ async function fetchTemplates() {
   if (data) templates.value = data.templates ?? []
 }
 
+async function postRollToChannel(roll) {
+  const channelId = session.value?.channel_id
+  if (!channelId) return
+  const content = roll.is_public
+    ? `🎲 **${roll.roller_username}** rolled ${roll.dice_type} → **${roll.result}**`
+    : `🎲 *${roll.roller_username} rolled ${roll.dice_type} privately*`
+  await fetch(base() + '/channels/' + channelId + '/messages', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + props.authToken,
+      'Content-Type':  'application/json',
+      'Accept':        'application/json',
+    },
+    body: JSON.stringify({ content }),
+  }).catch(() => {})
+}
+
+async function doGmRoll() {
+  if (gmRolling.value) return
+  gmRolling.value = true
+  gmRollResult.value = null
+  const data = await api('POST', `/plugins/rpg/sessions/${props.sessionId}/rolls`, {
+    dice_type: gmDiceType.value,
+    is_public: gmRollPublic.value,
+  })
+  if (data?.roll) {
+    gmRollResult.value = data.roll.result
+    await postRollToChannel(data.roll)
+    await pollState()
+  }
+  gmRolling.value = false
+}
+
 async function startSession() {
   await api('POST', `/plugins/rpg/sessions/${props.sessionId}/start`)
   await pollState()
@@ -348,10 +414,12 @@ async function confirmEnd() {
 async function requestRoll(memberId) {
   const diceType = requestDice.value[memberId] ?? 'd20'
   const note     = requestNote.value[memberId] ?? ''
+  const isPublic = requestPublic.value[memberId] ?? true
   await api('POST', `/plugins/rpg/sessions/${props.sessionId}/queue`, {
     assigned_to_member_id: memberId,
     dice_type: diceType,
     note: note || undefined,
+    is_public: isPublic,
   })
   requestNote.value = { ...requestNote.value, [memberId]: '' }
   await pollState()
@@ -619,6 +687,48 @@ onBeforeUnmount(() => {
 }
 .rpg-template-field { display: flex; gap: 6px; align-items: center; }
 .rpg-template-editor__actions { display: flex; gap: 6px; }
+
+/* GM dice strip */
+.rpg-gm__dice-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #1c1e2d;
+  border-bottom: 1px solid #2d2f45;
+  flex-shrink: 0;
+}
+.rpg-gm__dice-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9991dd;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.rpg-gm__dice-result {
+  font-size: 14px;
+  color: #7c6af7;
+  margin-left: 4px;
+}
+
+.rpg-visibility-toggle {
+  display: flex;
+  border: 1px solid #3d3a55;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.rpg-vis-btn {
+  padding: 2px 10px;
+  border: none;
+  background: transparent;
+  color: #9991dd;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.rpg-vis-btn--on { background: #7c6af7; color: #fff; }
 
 /* Right: chat/rolls */
 .rpg-gm__chat-panel {

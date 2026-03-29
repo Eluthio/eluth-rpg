@@ -60,7 +60,7 @@ function runAnimation(finalResult) {
   const max = diceMax[props.diceType] ?? 20
 
   // Cycle through random numbers, decelerating to a stop
-  const steps   = [50, 50, 70, 70, 100, 120, 150, 200, 250, 300]
+  const steps   = [40, 40, 60, 70, 100, 140, 190, 260, 350, 470, 600, 750]
   let stepIndex = 0
 
   function tick() {

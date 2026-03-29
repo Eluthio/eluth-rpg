@@ -189,6 +189,7 @@ class RpgController
             'assigned_to_member_id'   => $q->assigned_to_member_id,
             'dice_type'               => $q->dice_type,
             'note'                    => $q->note,
+            'is_public'               => isset($q->is_public) ? (bool) $q->is_public : true,
             'created_at'              => $q->created_at,
         ]);
 
@@ -271,8 +272,15 @@ class RpgController
 
         $diceType = $request->input('dice_type');
         $queueId  = $request->input('queue_id');
-        $isPublic = $request->boolean('is_public', true);
         $note     = $request->input('note');
+
+        // If fulfilling a GM-requested roll, inherit visibility from the queue item
+        if ($queueId && !$request->has('is_public')) {
+            $queueItem = DB::table('rpg_roll_queue')->where('id', $queueId)->first();
+            $isPublic = $queueItem ? (bool) $queueItem->is_public : true;
+        } else {
+            $isPublic = $request->boolean('is_public', true);
+        }
 
         $max = $this->diceMax($diceType);
         if (!$max) {
@@ -329,6 +337,7 @@ class RpgController
         $assignedTo = $request->input('assigned_to_member_id');
         $diceType   = $request->input('dice_type');
         $note       = $request->input('note');
+        $isPublic   = $request->boolean('is_public', true);
 
         $max = $this->diceMax($diceType);
         if (!$max) {
@@ -343,12 +352,13 @@ class RpgController
             'assigned_to_member_id'  => $assignedTo,
             'dice_type'              => $diceType,
             'note'                   => $note,
+            'is_public'              => $isPublic,
             'status'                 => 'pending',
             'created_at'             => now(),
             'updated_at'             => now(),
         ]);
 
-        return response()->json(['queue_item' => ['id' => $queueId, 'dice_type' => $diceType, 'note' => $note]], 201);
+        return response()->json(['queue_item' => ['id' => $queueId, 'dice_type' => $diceType, 'note' => $note, 'is_public' => $isPublic]], 201);
     }
 
     // DELETE /api/plugins/rpg/sessions/{id}/queue/{queueId}

@@ -19,11 +19,10 @@
             :dice-type="pendingRequest.dice_type"
             :result="pendingRollResult"
           />
-          <button
-            v-if="pendingRollResult === null"
-            class="rpg-btn rpg-btn--primary rpg-btn--big"
-            @click="rollRequested"
-          >Roll {{ pendingRequest.dice_type }}</button>
+          <div v-if="pendingRollResult === null" style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <span class="rpg-vis-label">{{ pendingRequest.is_public ? 'Public roll' : 'Private roll' }}</span>
+            <button class="rpg-btn rpg-btn--primary rpg-btn--big" @click="rollRequested">Roll {{ pendingRequest.dice_type }}</button>
+          </div>
           <div v-else class="rpg-player__roll-result">
             <span>You rolled</span> <strong>{{ pendingRollResult }}</strong>
           </div>
@@ -31,7 +30,13 @@
 
         <!-- Free dice -->
         <div v-else class="rpg-player__free-dice">
-          <div class="rpg-player__free-label">Free roll</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+            <div class="rpg-player__free-label">Free roll</div>
+            <div class="rpg-visibility-toggle">
+              <button :class="['rpg-vis-btn', freeRollPublic ? 'rpg-vis-btn--on' : '']" @click="freeRollPublic = true">Public</button>
+              <button :class="['rpg-vis-btn', !freeRollPublic ? 'rpg-vis-btn--on' : '']" @click="freeRollPublic = false">Private</button>
+            </div>
+          </div>
           <div class="rpg-player__dice-row">
             <DiceRoll
               v-for="dt in diceTypes"
@@ -136,6 +141,7 @@ const activeTab        = ref('Chat')
 const msgContainer     = ref(null)
 const freeRollResults  = ref({})
 const pendingRollResult = ref(null)
+const freeRollPublic   = ref(true)
 
 let pollTimer = null
 const bc = new BroadcastChannel('rpg-' + props.sessionId)
@@ -163,6 +169,23 @@ async function api(method, path, body = null) {
   })
   if (!res.ok) return null
   return res.json()
+}
+
+async function postRollToChannel(roll) {
+  const channelId = session.value?.channel_id
+  if (!channelId) return
+  const content = roll.is_public
+    ? `🎲 **${roll.roller_username}** rolled ${roll.dice_type} → **${roll.result}**`
+    : `🎲 *${roll.roller_username} rolled ${roll.dice_type} privately*`
+  await fetch(base() + '/channels/' + channelId + '/messages', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + props.authToken,
+      'Content-Type':  'application/json',
+      'Accept':        'application/json',
+    },
+    body: JSON.stringify({ content }),
+  }).catch(() => {})
 }
 
 async function pollState() {
@@ -207,10 +230,11 @@ async function doFreeRoll(diceType) {
   freeRollResults.value = { ...freeRollResults.value, [diceType]: null }
   const data = await api('POST', `/plugins/rpg/sessions/${props.sessionId}/rolls`, {
     dice_type: diceType,
-    is_public: true,
+    is_public: freeRollPublic.value,
   })
   if (data?.roll) {
     freeRollResults.value = { ...freeRollResults.value, [diceType]: data.roll.result }
+    await postRollToChannel(data.roll)
     await pollState()
   }
 }
@@ -222,10 +246,10 @@ async function rollRequested() {
   const data = await api('POST', `/plugins/rpg/sessions/${props.sessionId}/rolls`, {
     dice_type: req.dice_type,
     queue_id:  req.id,
-    is_public: true,
   })
   if (data?.roll) {
     pendingRollResult.value = data.roll.result
+    await postRollToChannel(data.roll)
     await pollState()
   }
 }
@@ -432,6 +456,32 @@ onBeforeUnmount(() => {
 .rpg-roll-entry__die { color: #9991dd; }
 .rpg-roll-entry__result { font-weight: 700; color: #7c6af7; font-size: 16px; min-width: 30px; }
 .rpg-roll-entry__note { color: #888; font-size: 12px; }
+
+.rpg-vis-label {
+  font-size: 11px;
+  color: #9991dd;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rpg-visibility-toggle {
+  display: flex;
+  border: 1px solid #3d3a55;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.rpg-vis-btn {
+  padding: 2px 10px;
+  border: none;
+  background: transparent;
+  color: #9991dd;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.rpg-vis-btn--on { background: #7c6af7; color: #fff; }
 
 .rpg-btn {
   padding: 6px 14px;
